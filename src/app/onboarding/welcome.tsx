@@ -17,7 +17,7 @@ export default function WelcomeScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.emoji}>🛡️</Text>
+        <Ionicons name="shield-checkmark" size={64} color="#8B5CF6" />
         <Text style={styles.title}>AI Content Guardian</Text>
         <Text style={styles.subtitle}>
           AI가 당신의 디지털 습관을 지키고{'\n'}
@@ -78,20 +78,22 @@ const styles = StyleSheet.create({
     marginBottom: 48,
   },
   emoji: {
-    fontSize: 72,
+    fontSize: 56,
     marginBottom: 16,
   },
   title: {
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: '700',
     color: '#FFFFFF',
     marginBottom: 12,
+    textAlign: 'center',
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#A0A0C0',
     textAlign: 'center',
     lineHeight: 24,
+    paddingHorizontal: 8,
   },
   features: {
     gap: 20,

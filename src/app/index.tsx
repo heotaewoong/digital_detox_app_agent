@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useUserStore } from '@/store/useUserStore';
 
 export default function SplashScreen() {
@@ -24,7 +25,7 @@ export default function SplashScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.icon}>🛡️</Text>
+      <Ionicons name="shield-checkmark" size={64} color="#8B5CF6" />
       <Text style={styles.title}>AI Content Guardian</Text>
       <Text style={styles.subtitle}>디지털 습관을 지키는 AI 에이전트</Text>
       <ActivityIndicator
