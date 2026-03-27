@@ -1,11 +1,21 @@
 import { create } from 'zustand';
-import { DetectionEvent, MonitoringState, ContentCategory } from '@/types';
+import { DetectionEvent, MonitoringState, ContentCategory, MoodEntry, MoodState } from '@/types';
 
 const MAX_LOG_SIZE = 100;
+
+interface InterventionRecord {
+  type: string;
+  result: string;
+  timestamp: string;
+}
 
 interface MonitorState {
   monitoring: MonitoringState;
   detectionLog: DetectionEvent[];
+  moodHistory: MoodEntry[];
+  currentMood: MoodState | null;
+  evasionCount: number;
+  interventionHistory: InterventionRecord[];
   // Actions
   startMonitoring: () => void;
   stopMonitoring: () => void;
@@ -13,6 +23,11 @@ interface MonitorState {
   addDetection: (event: DetectionEvent) => void;
   clearDetections: () => void;
   getDetectionsToday: () => DetectionEvent[];
+  addMoodEntry: (entry: MoodEntry) => void;
+  setCurrentMood: (mood: MoodState) => void;
+  recordEvasion: () => void;
+  recordInterventionResult: (type: string, result: string) => void;
+  getEvasionRate: () => number;
 }
 
 export const useMonitorStore = create<MonitorState>((set, get) => ({
@@ -26,6 +41,14 @@ export const useMonitorStore = create<MonitorState>((set, get) => ({
   },
 
   detectionLog: [],
+
+  moodHistory: [],
+
+  currentMood: null,
+
+  evasionCount: 0,
+
+  interventionHistory: [],
 
   startMonitoring: () => {
     set((state) => ({
@@ -90,5 +113,38 @@ export const useMonitorStore = create<MonitorState>((set, get) => ({
     const todayStr = new Date().toISOString().split('T')[0];
 
     return detectionLog.filter((event) => event.timestamp.startsWith(todayStr));
+  },
+
+  addMoodEntry: (entry: MoodEntry) => {
+    set((state) => ({
+      moodHistory: [entry, ...state.moodHistory].slice(0, 50),
+    }));
+  },
+
+  setCurrentMood: (mood: MoodState) => {
+    set(() => ({
+      currentMood: mood,
+    }));
+  },
+
+  recordEvasion: () => {
+    set((state) => ({
+      evasionCount: state.evasionCount + 1,
+    }));
+  },
+
+  recordInterventionResult: (type: string, result: string) => {
+    set((state) => ({
+      interventionHistory: [
+        { type, result, timestamp: new Date().toISOString() },
+        ...state.interventionHistory,
+      ].slice(0, MAX_LOG_SIZE),
+    }));
+  },
+
+  getEvasionRate: () => {
+    const { evasionCount, monitoring } = get();
+    if (monitoring.totalDetections === 0) return 0;
+    return evasionCount / monitoring.totalDetections;
   },
 }));

@@ -112,3 +112,70 @@ export interface AppSettings {
 
 // Navigation types
 export type TabRoute = 'dashboard' | 'monitor' | 'goals' | 'settings';
+
+// Mood & Context Types
+export type MoodType = 'great' | 'good' | 'neutral' | 'stressed' | 'anxious';
+
+export interface MoodEntry {
+  timestamp: string;
+  mood: MoodType;
+  energy: number; // 1-5
+  note?: string;
+}
+
+export interface MoodState {
+  reportedMood: MoodType | null;
+  inferredStress: number; // 0-100
+  triggers: string[];
+  riskLevel: RiskLevel;
+  suggestedIntervention: 'gentle' | 'moderate' | 'firm' | 'block';
+}
+
+export interface ContentContext {
+  appName: string;
+  previousApp?: string;
+  timeOfDay: number; // 0-23
+  sessionDuration: number; // minutes
+  consecutiveBlocks: number;
+  currentMood?: MoodState;
+}
+
+export interface ContextualAnalysis {
+  originalRiskScore: number;
+  adjustedRiskScore: number;
+  contextFactors: string[];
+  recommendedAction: 'allow' | 'log' | 'warn' | 'soft_block' | 'hard_block';
+  reasoning: string;
+}
+
+export interface InterventionStrategy {
+  type: 'nudge' | 'reminder' | 'delay' | 'redirect' | 'block';
+  intensity: number; // 1-5
+  message: string;
+  actionLabel: string;
+  cooldownSeconds: number;
+  showDreamReminder: boolean;
+  suggestAlternative?: string;
+}
+
+export interface AppTransition {
+  from: string;
+  to: string;
+  timestamp: string;
+  wasBlocked: boolean;
+}
+
+export interface HabitPattern {
+  type: 'improvement' | 'regression' | 'plateau' | 'spike';
+  category: string;
+  description: string;
+  confidence: number;
+}
+
+export interface EvasionDetection {
+  isEvasion: boolean;
+  confidence: number;
+  pattern: string;
+  fromApp: string;
+  toApp: string;
+}
