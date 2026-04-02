@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Content Guardian</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 380px;
+      min-height: 520px;
+      background: #0A0A1A;
+      color: #FFFFFF;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 14px;
+    }
+    .header {
+      background: linear-gradient(135deg, #6C5CE7, #A855F7);
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .header-left { display: flex; align-items: center; gap: 10px; }
+    .header-icon { font-size: 22px; }
+    .header-title { font-size: 15px; font-weight: 700; }
+    .header-sub { font-size: 10px; opacity: 0.8; margin-top: 1px; }
+    .toggle-btn {
+      background: rgba(255,255,255,0.2);
+      border: 2px solid rgba(255,255,255,0.4);
+      border-radius: 20px;
+      padding: 5px 14px;
+      color: white;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .toggle-btn.active { background: rgba(16,185,129,0.3); border-color: #10B981; }
+    .toggle-btn.inactive { background: rgba(239,68,68,0.3); border-color: #EF4444; }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      background: rgba(255,255,255,0.03);
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 10px 4px;
+      background: none;
+      border: none;
+      color: #6B6B8D;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+    }
+    .tab-btn.active { color: #8B5CF6; border-bottom-color: #8B5CF6; }
+
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* Stats */
+    .stats-row {
+      display: flex;
+      padding: 10px 16px;
+      gap: 8px;
+      background: rgba(255,255,255,0.03);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .stat-box {
+      flex: 1;
+      background: rgba(255,255,255,0.05);
+      border-radius: 10px;
+      padding: 8px;
+      text-align: center;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .stat-num { font-size: 18px; font-weight: 700; color: #8B5CF6; }
+    .stat-label { font-size: 10px; color: #6B6B8D; margin-top: 2px; }
+
+    .section { padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .section-title {
+      font-size: 11px; font-weight: 600; color: #6B6B8D;
+      text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;
+    }
+
+    .keyword-group {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 7px 10px; background: rgba(255,255,255,0.04);
+      border-radius: 8px; margin-bottom: 5px; border: 1px solid rgba(255,255,255,0.08);
+    }
+    .group-info { flex: 1; }
+    .group-name { font-size: 12px; font-weight: 500; }
+    .group-count { font-size: 10px; color: #6B6B8D; margin-top: 1px; }
+    .risk-badge { font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 5px; margin-right: 6px; }
+
+    .toggle-switch { position: relative; width: 34px; height: 18px; cursor: pointer; }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; inset: 0; background: #333; border-radius: 18px; transition: 0.3s; }
+    .slider:before { content: ''; position: absolute; width: 12px; height: 12px; left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: 0.3s; }
+    input:checked + .slider { background: #8B5CF6; }
+    input:checked + .slider:before { transform: translateX(16px); }
+
+    .add-row { display: flex; gap: 6px; margin-top: 6px; }
+    .add-input {
+      flex: 1; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px; padding: 7px 10px; color: white; font-size: 12px; outline: none;
+    }
+    .add-input:focus { border-color: #8B5CF6; }
+    .add-input::placeholder { color: #6B6B8D; }
+    .add-btn {
+      background: linear-gradient(135deg, #6C5CE7, #A855F7);
+      border: none; border-radius: 8px; padding: 7px 12px;
+      color: white; cursor: pointer; font-size: 12px; font-weight: 600;
+    }
+
+    .strength-row { display: flex; gap: 5px; }
+    .strength-btn {
+      flex: 1; padding: 7px; border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.04);
+      color: #A0A0C0; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s;
+    }
+    .strength-btn.active { border-color: #8B5CF6; background: rgba(139,92,246,0.2); color: #A855F7; }
+
+    .blocked-domain-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 5px 8px; background: rgba(239,68,68,0.08);
+      border-radius: 7px; margin-bottom: 3px; border: 1px solid rgba(239,68,68,0.2);
+    }
+    .domain-text { font-size: 11px; color: #FCA5A5; }
+    .remove-btn { background: none; border: none; color: #6B6B8D; cursor: pointer; font-size: 14px; }
+    .remove-btn:hover { color: #EF4444; }
+
+    /* Report Tab */
+    .report-header {
+      padding: 12px 16px;
+      background: rgba(255,255,255,0.03);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .report-total { font-size: 22px; font-weight: 700; color: #FFF; }
+    .report-sub { font-size: 11px; color: #6B6B8D; margin-top: 2px; }
+    .productivity-bar {
+      height: 8px; border-radius: 4px; overflow: hidden;
+      background: rgba(255,255,255,0.1); margin: 10px 0 4px;
+      display: flex;
+    }
+    .prod-fill { background: #10B981; border-radius: 4px; }
+    .dist-fill { background: #EF4444; border-radius: 4px; }
+    .prod-labels { display: flex; justify-content: space-between; font-size: 10px; }
+    .prod-label-good { color: #10B981; font-weight: 600; }
+    .prod-label-bad { color: #EF4444; font-weight: 600; }
+
+    .category-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 16px; border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .cat-emoji { font-size: 18px; width: 24px; text-align: center; }
+    .cat-info { flex: 1; }
+    .cat-name { font-size: 12px; font-weight: 500; }
+    .cat-bar-bg { height: 4px; background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden; margin-top: 3px; }
+    .cat-bar-fill { height: 100%; border-radius: 2px; }
+    .cat-time { font-size: 12px; font-weight: 600; color: #FFF; min-width: 36px; text-align: right; }
+    .cat-badge {
+      font-size: 9px; font-weight: 600; padding: 1px 5px; border-radius: 4px;
+    }
+    .badge-prod { background: rgba(16,185,129,0.15); color: #10B981; }
+    .badge-dist { background: rgba(239,68,68,0.15); color: #EF4444; }
+
+    .empty-report {
+      padding: 30px 16px; text-align: center; color: #6B6B8D; font-size: 13px;
+    }
+    .refresh-btn {
+      display: block; margin: 8px auto 0;
+      background: rgba(139,92,246,0.15); border: 1px solid rgba(139,92,246,0.3);
+      border-radius: 8px; padding: 6px 16px; color: #8B5CF6;
+      cursor: pointer; font-size: 12px; font-weight: 600;
+    }
+
+    .footer { padding: 10px 16px; text-align: center; color: #6B6B8D; font-size: 10px; }
+    @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
+    .focus-preset-btn {
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px; padding: 7px 12px; color: #A0A0C0; cursor: pointer; font-size: 12px; font-weight: 600;
+    }
+    .focus-preset-btn.active { border-color: #10B981; background: rgba(16,185,129,0.15); color: #10B981; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-left">
+      <span class="header-icon">🛡️</span>
+      <div>
+        <div class="header-title">AI Content Guardian</div>
+        <div class="header-sub" id="currentPageInfo">디지털 디톡스 도우미</div>
+      </div>
+    </div>
+    <button class="toggle-btn" id="mainToggle">ON</button>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="block">🚫 차단</button>
+    <button class="tab-btn" data-tab="focus">🌲 집중</button>
+    <button class="tab-btn" data-tab="report">📊 리포트</button>
+    <button class="tab-btn" data-tab="sites">🌐 사이트</button>
+  </div>
+
+  <!-- ── 차단 탭 ── -->
+  <div class="tab-content active" id="tab-block">
+    <div class="stats-row">
+      <div class="stat-box">
+        <div class="stat-num" id="todayBlocked">0</div>
+        <div class="stat-label">오늘 차단</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num" id="totalBlocked">0</div>
+        <div class="stat-label">총 차단</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num" id="activeGroups">0</div>
+        <div class="stat-label">활성 그룹</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">차단 강도</div>
+      <div class="strength-row">
+        <button class="strength-btn" data-strength="gentle">🔔 알림만</button>
+        <button class="strength-btn" data-strength="moderate">🚫 차단</button>
+        <button class="strength-btn" data-strength="strict">🔒 엄격</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">키워드 그룹</div>
+      <div id="keywordGroups"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">키워드 직접 추가</div>
+      <div class="add-row">
+        <input class="add-input" id="newKeyword" placeholder="예: 리그오브레전드" />
+        <button class="add-btn" id="addKeywordBtn">추가</button>
+      </div>
+      <div id="customKeywords" style="margin-top:6px;"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">사이트 차단</div>
+      <div class="add-row">
+        <input class="add-input" id="newDomain" placeholder="예: tiktok.com" />
+        <button class="add-btn" id="addDomainBtn">추가</button>
+      </div>
+      <div id="blockedDomains" style="margin-top:6px;"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">YouTube API 키 <span style="color:#6B6B8D;font-size:9px;font-weight:400;">(선택 - 영상 정확 분류용)</span></div>
+      <div class="add-row">
+        <input class="add-input" id="ytApiKey" placeholder="AIza..." type="password" />
+        <button class="add-btn" id="saveYtApiKey">저장</button>
+      </div>
+      <div style="font-size:10px;color:#6B6B8D;margin-top:4px;">
+        Google Cloud Console에서 YouTube Data API v3 키 발급 후 입력하면<br>
+        영상 카테고리를 정확하게 분류합니다 (무료, 하루 10,000회)
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">🎬 AI 목표 영상 생성 <span style="color:#6B6B8D;font-size:9px;font-weight:400;">(선택 - AWS Lambda)</span></div>
+      <div class="add-row">
+        <input class="add-input" id="lambdaEndpoint" placeholder="https://xxx.execute-api.ap-northeast-2.amazonaws.com/..." />
+        <button class="add-btn" id="saveLambdaEndpoint">저장</button>
+      </div>
+      <div style="font-size:10px;color:#6B6B8D;margin-top:4px;">
+        AWS Lambda 엔드포인트를 설정하면 차단 시 목표 기반 AI 영상을 자동 생성합니다.<br>
+        (Bedrock + Polly + S3 필요)
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 집중 모드 탭 ── -->
+  <div class="tab-content" id="tab-focus">
+    <div id="focusStatus" style="padding:16px; text-align:center;">
+      <div id="focusInactive">
+        <div style="font-size:48px; margin-bottom:12px;">🌲</div>
+        <div style="font-size:15px; font-weight:600; color:#FFF; margin-bottom:6px;">집중 모드</div>
+        <div style="font-size:12px; color:#6B6B8D; margin-bottom:16px;">집중 모드 중에는 허용된 사이트만 접속 가능합니다</div>
+        <div style="display:flex; gap:6px; justify-content:center; margin-bottom:16px;" id="focusPresets">
+          <button class="focus-preset-btn" data-min="25">25분</button>
+          <button class="focus-preset-btn" data-min="50">50분</button>
+          <button class="focus-preset-btn" data-min="90">90분</button>
+          <button class="focus-preset-btn" data-min="120">2시간</button>
+        </div>
+        <button id="startFocusBtn" style="background:linear-gradient(135deg,#10B981,#059669); border:none; border-radius:12px; padding:12px 28px; color:white; font-size:15px; font-weight:700; cursor:pointer; width:100%;">
+          🌲 집중 시작
+        </button>
+      </div>
+      <div id="focusActive" style="display:none;">
+        <div style="font-size:48px; margin-bottom:8px; animation:pulse 2s infinite;">🌲</div>
+        <div style="font-size:32px; font-weight:700; color:#10B981; font-variant-numeric:tabular-nums;" id="focusTimer">--:--</div>
+        <div style="font-size:13px; color:#A0A0C0; margin:8px 0 16px;">집중 중... 화이팅!</div>
+        <button id="stopFocusBtn" style="background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.3); border-radius:10px; padding:10px 24px; color:#EF4444; font-size:13px; font-weight:600; cursor:pointer;">
+          집중 종료
+        </button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">허용 사이트 (집중 모드 중)</div>
+      <div style="font-size:11px; color:#6B6B8D; margin-bottom:8px;">기본: localhost, google.com, naver.com, kakao.com</div>
+      <div class="add-row">
+        <input class="add-input" id="focusWhitelistInput" placeholder="예: github.com" />
+        <button class="add-btn" id="addFocusWhitelistBtn">추가</button>
+      </div>
+      <div id="focusWhitelist" style="margin-top:6px;"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">데이터 내보내기</div>
+      <div style="display:flex; gap:6px;">
+        <button id="exportJsonBtn" style="flex:1; background:rgba(99,102,241,0.15); border:1px solid rgba(99,102,241,0.3); border-radius:8px; padding:8px; color:#818CF8; font-size:12px; font-weight:600; cursor:pointer;">
+          📄 JSON
+        </button>
+        <button id="exportCsvBtn" style="flex:1; background:rgba(16,185,129,0.15); border:1px solid rgba(16,185,129,0.3); border-radius:8px; padding:8px; color:#10B981; font-size:12px; font-weight:600; cursor:pointer;">
+          📊 CSV
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 리포트 탭 ── -->
+  <div class="tab-content" id="tab-report">
+    <div class="report-header" id="reportHeader">
+      <div class="report-total" id="reportTotal">-</div>
+      <div class="report-sub">오늘 총 사용시간</div>
+      <div class="productivity-bar">
+        <div class="prod-fill" id="prodFill" style="width:0%"></div>
+        <div class="dist-fill" id="distFill" style="width:100%"></div>
+      </div>
+      <div class="prod-labels">
+        <span class="prod-label-good" id="prodLabel">생산적 0%</span>
+        <span class="prod-label-bad" id="distLabel">비생산적 100%</span>
+      </div>
+    </div>
+    <div id="categoryList"></div>
+    <button class="refresh-btn" id="refreshReport">↻ 새로고침</button>
+  </div>
+
+  <!-- ── 사이트별 탭 ── -->
+  <div class="tab-content" id="tab-sites">
+    <div id="siteList" style="padding: 8px 0;"></div>
+    <button class="refresh-btn" id="refreshSites">↻ 새로고침</button>
+  </div>
+
+  <div class="footer">AI Content Guardian v2.0 · 맥락 기반 차단 + AI 분류</div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

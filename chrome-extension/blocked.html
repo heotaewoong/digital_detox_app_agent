@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>차단됨 - AI Content Guardian</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0A0A1A 0%, #1A0A2E 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      color: white;
+      overflow: hidden;
+    }
+
+    /* 진행 바 */
+    .progress-bar-bg {
+      width: 100%;
+      height: 3px;
+      background: rgba(255,255,255,0.1);
+      position: fixed;
+      top: 0;
+      left: 0;
+    }
+    #progressBar {
+      height: 100%;
+      background: linear-gradient(90deg, #6C5CE7, #A855F7);
+      width: 0%;
+      transition: none;
+    }
+
+    .layout {
+      display: flex;
+      width: 100%;
+      max-width: 900px;
+      min-height: 100vh;
+      padding: 20px;
+      gap: 24px;
+      align-items: center;
+    }
+
+    /* 왼쪽: 차단 정보 */
+    .left-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .brand-icon { font-size: 28px; }
+    .brand-name { font-size: 16px; font-weight: 700; color: #A855F7; }
+
+    .block-card {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 20px;
+      padding: 24px;
+    }
+    .block-title {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      background: linear-gradient(135deg, #6C5CE7, #A855F7);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .reason-label { font-size: 11px; color: #6B6B8D; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+    .reason-text { font-size: 14px; color: #E2E8F0; line-height: 1.6; }
+    .keyword-badge {
+      display: inline-block;
+      background: rgba(239,68,68,0.15);
+      border: 1px solid rgba(239,68,68,0.3);
+      color: #EF4444;
+      border-radius: 8px;
+      padding: 4px 12px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-top: 8px;
+    }
+
+    .btn-group { display: flex; gap: 10px; margin-top: 16px; }
+    .btn-back {
+      flex: 1;
+      padding: 12px;
+      background: linear-gradient(135deg, #6C5CE7, #A855F7);
+      border: none;
+      border-radius: 12px;
+      color: white;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .btn-close {
+      padding: 12px 20px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      color: #A0A0C0;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .timer { font-size: 12px; color: #6B6B8D; margin-top: 10px; text-align: center; }
+
+    /* 오른쪽: 동기부여 슬라이드 */
+    .right-panel {
+      flex: 1;
+      background: rgba(139,92,246,0.08);
+      border: 1px solid rgba(139,92,246,0.2);
+      border-radius: 24px;
+      padding: 32px 28px;
+      display: flex;
+      flex-direction: column;
+      min-height: 400px;
+    }
+
+    .slide-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+    .slide-label { font-size: 11px; color: '#8B5CF6'; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: #8B5CF6; }
+    .slide-nav { display: flex; gap: 8px; }
+    .slide-nav-btn {
+      width: 32px; height: 32px; border-radius: 16px;
+      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1);
+      color: #A0A0C0; cursor: pointer; font-size: 16px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .slide-nav-btn:hover { background: rgba(139,92,246,0.2); color: #A855F7; }
+
+    #slideContainer {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      gap: 16px;
+    }
+    #slideEmoji { font-size: 64px; }
+    #slideTitle { font-size: 22px; font-weight: 700; color: #FFF; }
+    #slideMessage {
+      font-size: 15px;
+      color: #A0A0C0;
+      line-height: 1.8;
+      white-space: pre-line;
+    }
+
+    .slide-dots {
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+      margin-top: 20px;
+    }
+    .slide-dot {
+      width: 6px; height: 6px; border-radius: 3px;
+      background: rgba(255,255,255,0.2);
+      transition: all 0.3s;
+    }
+    .slide-dot.active {
+      width: 20px;
+      background: #8B5CF6;
+    }
+
+    @media (max-width: 640px) {
+      .layout { flex-direction: column; padding: 16px; }
+      .right-panel { min-height: 300px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="progress-bar-bg"><div id="progressBar"></div></div>
+
+  <div class="layout">
+    <!-- 왼쪽: 차단 정보 -->
+    <div class="left-panel">
+      <div class="brand">
+        <span class="brand-icon">🛡️</span>
+        <span class="brand-name">AI Content Guardian</span>
+      </div>
+
+      <div class="block-card">
+        <div class="block-title">페이지가 차단되었습니다</div>
+        <div class="reason-label">차단 이유</div>
+        <div class="reason-text" id="reasonText">유해 콘텐츠가 감지되었습니다.</div>
+        <div id="keywordBadge"></div>
+      </div>
+
+      <div class="block-card">
+        <div class="btn-group">
+          <button class="btn-back" id="backBtn">← 돌아가기</button>
+          <button class="btn-close" id="closeBtn">닫기</button>
+        </div>
+        <div class="timer" id="timer"></div>
+      </div>
+    </div>
+
+    <!-- 오른쪽: 동기부여 슬라이드 -->
+    <div class="right-panel">
+      <div class="slide-header">
+        <span class="slide-label">🎯 목표 동기부여</span>
+        <div class="slide-nav">
+          <button class="slide-nav-btn" id="prevSlideBtn">‹</button>
+          <button class="slide-nav-btn" id="nextSlideBtn">›</button>
+        </div>
+      </div>
+
+      <div id="slideContainer">
+        <div id="slideEmoji">🛡️</div>
+        <div id="slideTitle">차단되었습니다</div>
+        <div id="slideMessage">지금 이 순간이 중요합니다.</div>
+      </div>
+
+      <div class="slide-dots" id="slideDots"></div>
+    </div>
+  </div>
+
+  <script src="blocked.js"></script>
+</body>
+</html>
