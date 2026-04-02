@@ -1,8 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Animated, Vibration } from 'react-native';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Animated, Vibration } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
+import { MoodAnalyzer } from '@/services/ai/MoodAnalyzer';
+import { AdaptiveInterventionEngine } from '@/services/ai/AdaptiveInterventionEngine';
 
 const SOS_DURATION_OPTIONS = [
   { label: '15분', value: 15 },
@@ -18,6 +20,9 @@ export default function EmergencyScreen() {
   const [selectedDuration, setSelectedDuration] = useState(30);
   const [remainingSeconds, setRemainingSeconds] = useState(0);
   const pulseAnim = useState(() => new Animated.Value(1))[0];
+
+  const moodState = useMemo(() => MoodAnalyzer.getCurrentMoodState(), []);
+  const alternative = useMemo(() => AdaptiveInterventionEngine.getAlternativeActivity('general', 'stressed'), []);
 
   useEffect(() => {
     if (!isActive) return;
@@ -111,6 +116,34 @@ export default function EmergencyScreen() {
             설정한 시간 동안 해제가 어렵습니다.
           </Text>
 
+          {/* Stress Level */}
+          <View style={st.stressInfo}>
+            <View style={st.stressRow}>
+              <Ionicons name="pulse-outline" size={16} color={moodState.inferredStress > 60 ? '#EF4444' : '#FBBF24'} />
+              <Text style={st.stressText}>현재 스트레스 지수: {moodState.inferredStress}%</Text>
+              <View style={[st.stressBadge, {
+                backgroundColor: moodState.riskLevel === 'critical' ? 'rgba(239,68,68,0.2)' :
+                                 moodState.riskLevel === 'high' ? 'rgba(249,115,22,0.2)' : 'rgba(251,191,36,0.2)'
+              }]}>
+                <Text style={[st.stressBadgeText, {
+                  color: moodState.riskLevel === 'critical' ? '#EF4444' :
+                         moodState.riskLevel === 'high' ? '#F97316' : '#FBBF24'
+                }]}>
+                  {moodState.riskLevel === 'critical' ? '🔴 위험' : moodState.riskLevel === 'high' ? '🟠 높음' : '🟡 보통'}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Alternative suggestion */}
+          <View style={st.altCard}>
+            <Ionicons name="leaf-outline" size={18} color="#10B981" />
+            <View style={{ flex: 1 }}>
+              <Text style={st.altTitle}>대신 이렇게 해보세요</Text>
+              <Text style={st.altText}>{alternative}</Text>
+            </View>
+          </View>
+
           <Text style={st.durationLabel}>차단 시간 선택</Text>
           <View style={st.durationRow}>
             {SOS_DURATION_OPTIONS.map((opt) => (
@@ -163,4 +196,12 @@ const st = StyleSheet.create({
   durationTextActive: { color: '#EF4444' },
   sosBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 16, paddingVertical: 18, paddingHorizontal: 40, gap: 10 },
   sosBtnText: { fontSize: 18, fontWeight: '700', color: '#FFF' },
+  stressInfo: { alignSelf: 'stretch', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 12, marginBottom: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+  stressRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  stressText: { flex: 1, fontSize: 13, color: '#A0A0C0', fontWeight: '500' },
+  stressBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+  stressBadgeText: { fontSize: 11, fontWeight: '700' },
+  altCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: 'rgba(16,185,129,0.08)', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(16,185,129,0.25)', padding: 14, marginBottom: 24, alignSelf: 'stretch' },
+  altTitle: { fontSize: 12, fontWeight: '700', color: '#10B981', marginBottom: 4 },
+  altText: { fontSize: 13, color: '#A0A0C0', lineHeight: 20 },
 });

@@ -5,6 +5,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useMonitorStore } from '@/store/useMonitorStore';
 import { ChromeExtensionBridge } from '@/services/ChromeExtensionBridge';
+import { CrossAppTracker } from '@/services/monitoring/CrossAppTracker';
+import { AdaptiveInterventionEngine } from '@/services/ai/AdaptiveInterventionEngine';
 
 type Period = 'today' | 'week' | 'all';
 
@@ -21,6 +23,8 @@ export default function BlockStatsScreen() {
   const { detectionLog } = useMonitorStore();
   const [period, setPeriod] = useState<Period>('today');
   const [extStats, setExtStats] = useState<any>(null);
+  const [crossStats] = useState(() => CrossAppTracker.getTransitionStats());
+  const [effectStats] = useState(() => AdaptiveInterventionEngine.getEffectivenessStats());
 
   useEffect(() => {
     const stats = ChromeExtensionBridge.getExtensionStats();
@@ -99,6 +103,56 @@ export default function BlockStatsScreen() {
             <Text style={s.summaryLabel}>기록</Text>
           </LinearGradient>
         </View>
+
+        {/* 크로스앱 우회 분석 */}
+        <Text style={s.sectionTitle}>🔀 앱 전환 & 우회 분석</Text>
+        <View style={s.evasionCard}>
+          <View style={s.evasionRow}>
+            <View style={s.evasionStat}>
+              <Text style={s.evasionNum}>{crossStats.totalTransitions}</Text>
+              <Text style={s.evasionLbl}>총 전환</Text>
+            </View>
+            <View style={s.evasionStat}>
+              <Text style={[s.evasionNum, { color: crossStats.evasionAttempts > 0 ? '#EF4444' : '#10B981' }]}>
+                {crossStats.evasionAttempts}
+              </Text>
+              <Text style={s.evasionLbl}>우회 시도</Text>
+            </View>
+            <View style={s.evasionStat}>
+              <Text style={[s.evasionNum, { color: crossStats.evasionRate > 20 ? '#EF4444' : '#10B981' }]}>
+                {crossStats.evasionRate}%
+              </Text>
+              <Text style={s.evasionLbl}>우회율</Text>
+            </View>
+          </View>
+          {crossStats.mostCommonEvasion !== '없음' && (
+            <View style={s.evasionAlert}>
+              <Ionicons name="swap-horizontal" size={14} color="#FBBF24" />
+              <Text style={s.evasionAlertText}>자주 우회: {crossStats.mostCommonEvasion}</Text>
+            </View>
+          )}
+        </View>
+
+        {/* AI 개입 효과 */}
+        {Object.keys(effectStats).length > 0 && (
+          <>
+            <Text style={s.sectionTitle}>🧠 AI 개입 효과</Text>
+            <View style={s.effectCard}>
+              {Object.entries(effectStats).map(([type, stat]) => (
+                <View key={type} style={s.effectRow}>
+                  <Text style={s.effectType}>{type}</Text>
+                  <View style={s.effectBarBg}>
+                    <View style={[s.effectBarFill, {
+                      width: `${stat.rate}%`,
+                      backgroundColor: stat.rate >= 70 ? '#10B981' : stat.rate >= 40 ? '#FBBF24' : '#EF4444'
+                    }]} />
+                  </View>
+                  <Text style={s.effectRate}>{stat.rate}%</Text>
+                </View>
+              ))}
+            </View>
+          </>
+        )}
 
         {/* 시간대별 차트 (오늘) */}
         {period === 'today' && Object.keys(hourMap).length > 0 && (
@@ -219,4 +273,18 @@ const s = StyleSheet.create({
   logFooter: { flexDirection: 'row', justifyContent: 'space-between' },
   logCat: { fontSize: 11, color: '#6B6B8D' },
   logTime: { fontSize: 11, color: '#6B6B8D' },
+  // Evasion analysis styles
+  evasionCard: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 14, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(239,68,68,0.2)' },
+  evasionRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 10 },
+  evasionStat: { alignItems: 'center' },
+  evasionNum: { fontSize: 24, fontWeight: '800', color: '#FFF' },
+  evasionLbl: { fontSize: 11, color: '#6B6B8D', marginTop: 2 },
+  evasionAlert: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(251,191,36,0.1)', borderRadius: 8, padding: 8 },
+  evasionAlertText: { fontSize: 12, color: '#FBBF24', fontWeight: '600' },
+  effectCard: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 14, padding: 14, marginBottom: 20, gap: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+  effectRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  effectType: { fontSize: 12, color: '#A0A0C0', width: 70 },
+  effectBarBg: { flex: 1, height: 8, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 4, overflow: 'hidden' },
+  effectBarFill: { height: '100%', borderRadius: 4 },
+  effectRate: { fontSize: 12, fontWeight: '700', color: '#FFF', width: 36, textAlign: 'right' },
 });

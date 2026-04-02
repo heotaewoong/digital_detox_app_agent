@@ -82,6 +82,7 @@ export default function DashboardScreen() {
     { label: '사용 분석', emoji: '📈', route: '/analytics', color: '#00D2FF' },
     { label: '차단 통계', emoji: '🛡️', route: '/block-stats', color: '#EF4444' },
     { label: '동기부여', emoji: '🎬', route: '/motivation-video', color: '#A855F7' },
+    { label: '웰니스', emoji: '🧘', route: '/wellness', color: '#10B981' },
   ];
 
   return (

@@ -8,8 +8,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useMonitorStore } from '@/store/useMonitorStore';
 import { useUserStore } from '@/store/useUserStore';
 import { ContentMonitor } from '@/services/monitoring/ContentMonitor';
+import { CrossAppTracker } from '@/services/monitoring/CrossAppTracker';
+import { MoodAnalyzer } from '@/services/ai/MoodAnalyzer';
+import MoodCheckIn from '@/components/mood/MoodCheckIn';
 import { CATEGORY_LABELS } from '@/utils/constants';
-import { DetectionEvent, ContentCategory } from '@/types';
+import { DetectionEvent, ContentCategory, MoodType } from '@/types';
 
 const ACTION_COLORS = {
   logged: '#3B82F6',
@@ -30,11 +33,22 @@ export default function MonitorScreen() {
     useMonitorStore();
 
   const [isSimRunning, setIsSimRunning] = useState(false);
+  const [moodModalVisible, setMoodModalVisible] = useState(false);
+  const [crossAppStats, setCrossAppStats] = useState(() => CrossAppTracker.getTransitionStats());
+  const [moodState, setMoodState] = useState(() => MoodAnalyzer.getCurrentMoodState());
+  const [evasionAlert, setEvasionAlert] = useState<string | null>(null);
+
+  const handleMoodSubmit = (mood: MoodType, energy: number, note?: string) => {
+    MoodAnalyzer.addMoodCheckIn(mood, energy, note);
+    setMoodState(MoodAnalyzer.getCurrentMoodState());
+    setMoodModalVisible(false);
+  };
 
   const handleToggleMonitoring = () => {
     if (monitoring.isActive) {
       stopMonitoring();
       setIsSimRunning(false);
+      MoodAnalyzer.recordSessionEnd();
       ContentMonitor.getInstance().stopSimulation();
     } else {
       startMonitoring();
@@ -60,10 +74,25 @@ export default function MonitorScreen() {
 
     monitor.startSimulation((event: DetectionEvent) => {
       addDetection(event);
+      // Record app transition in CrossAppTracker
+      MoodAnalyzer.recordAppSwitch(event.appName);
       if (event.action === 'blocked') {
-        router.push('/block/intervention');
+        CrossAppTracker.recordTransition('previous_app', event.appName, true);
+        MoodAnalyzer.recordBlockedVisit(event.category);
+        // Check for evasion
+        const evasion = CrossAppTracker.detectEvasionPattern();
+        if (evasion.isEvasion) {
+          setEvasionAlert(`⚠️ 우회 감지: ${evasion.pattern}`);
+          setTimeout(() => setEvasionAlert(null), 5000);
+        }
+        setCrossAppStats(CrossAppTracker.getTransitionStats());
+        setMoodState(MoodAnalyzer.getCurrentMoodState());
+        router.push(`/block/intervention?category=${event.category}` as any);
+      } else {
+        CrossAppTracker.recordTransition('previous_app', event.appName, false);
       }
     });
+    MoodAnalyzer.recordSessionStart();
     setIsSimRunning(true);
   };
 
@@ -79,6 +108,7 @@ export default function MonitorScreen() {
   });
 
   return (
+    <>
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
@@ -140,6 +170,45 @@ export default function MonitorScreen() {
           {isSimRunning ? '시뮬레이션 중지' : '시뮬레이션 시작'}
         </Text>
       </TouchableOpacity>
+
+      {/* Evasion Alert Banner */}
+      {evasionAlert && (
+        <View style={styles.evasionBanner}>
+          <Ionicons name="warning" size={16} color="#EF4444" />
+          <Text style={styles.evasionText}>{evasionAlert}</Text>
+        </View>
+      )}
+
+      {/* Mood + Stress Row */}
+      <View style={styles.moodStressRow}>
+        <TouchableOpacity style={styles.moodStressCard} onPress={() => setMoodModalVisible(true)} activeOpacity={0.7}>
+          <Text style={styles.moodStressLabel}>기분 체크인</Text>
+          <Text style={styles.moodStressEmoji}>
+            {moodState.reportedMood === 'great' ? '😄' : moodState.reportedMood === 'good' ? '🙂' :
+             moodState.reportedMood === 'neutral' ? '😐' : moodState.reportedMood === 'stressed' ? '😰' :
+             moodState.reportedMood === 'anxious' ? '😟' : '😊'}
+          </Text>
+          <Text style={styles.moodCheckText}>탭하여 기록</Text>
+        </TouchableOpacity>
+        <View style={styles.moodStressCard}>
+          <Text style={styles.moodStressLabel}>스트레스 지수</Text>
+          <Text style={[styles.moodStressValue, {
+            color: moodState.inferredStress > 60 ? '#EF4444' : moodState.inferredStress > 30 ? '#FBBF24' : '#10B981'
+          }]}>{moodState.inferredStress}</Text>
+          <Text style={[styles.moodRiskLevel, {
+            color: moodState.riskLevel === 'critical' ? '#EF4444' : moodState.riskLevel === 'high' ? '#F97316' :
+                   moodState.riskLevel === 'medium' ? '#FBBF24' : '#10B981'
+          }]}>{moodState.riskLevel === 'critical' ? '🔴 위험' : moodState.riskLevel === 'high' ? '🟠 높음' :
+              moodState.riskLevel === 'medium' ? '🟡 보통' : '🟢 낮음'}</Text>
+        </View>
+        <View style={styles.moodStressCard}>
+          <Text style={styles.moodStressLabel}>우회 시도</Text>
+          <Text style={[styles.moodStressValue, { color: crossAppStats.evasionAttempts > 0 ? '#EF4444' : '#10B981' }]}>
+            {crossAppStats.evasionAttempts}
+          </Text>
+          <Text style={styles.moodCheckText}>{crossAppStats.evasionRate}% 비율</Text>
+        </View>
+      </View>
 
       {/* Today's Stats */}
       <View style={styles.statsRow}>
@@ -221,6 +290,13 @@ export default function MonitorScreen() {
 
       <View style={styles.bottomSpacer} />
     </ScrollView>
+
+    <MoodCheckIn
+      visible={moodModalVisible}
+      onClose={() => setMoodModalVisible(false)}
+      onSubmit={handleMoodSubmit}
+    />
+    </>
   );
 }
 
@@ -407,4 +483,21 @@ const styles = StyleSheet.create({
   bottomSpacer: {
     height: 100,
   },
+  evasionBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: 'rgba(239,68,68,0.15)', borderRadius: 10, borderWidth: 1,
+    borderColor: 'rgba(239,68,68,0.3)', padding: 12, marginBottom: 12,
+  },
+  evasionText: { flex: 1, fontSize: 13, color: '#EF4444', fontWeight: '600' },
+  moodStressRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
+  moodStressCard: {
+    flex: 1, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)', borderRadius: 14, padding: 12,
+    alignItems: 'center', gap: 4,
+  },
+  moodStressLabel: { fontSize: 10, color: '#6B6B8D', fontWeight: '600' },
+  moodStressEmoji: { fontSize: 26 },
+  moodStressValue: { fontSize: 24, fontWeight: '800' },
+  moodCheckText: { fontSize: 10, color: '#6B6B8D' },
+  moodRiskLevel: { fontSize: 11, fontWeight: '700' },
 });
