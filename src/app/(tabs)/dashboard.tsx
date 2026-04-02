@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Dimensions, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -8,8 +8,11 @@ import { useReportStore } from '@/store/useReportStore';
 import { useFocusStore } from '@/store/useFocusStore';
 import { formatMinutes, getTimeGreeting } from '@/utils/analytics';
 import { CATEGORY_LABELS } from '@/utils/constants';
-import { ContentCategory } from '@/types';
+import { ContentCategory, MoodType } from '@/types';
 import { ChromeExtensionBridge } from '@/services/ChromeExtensionBridge';
+import MoodCheckIn from '@/components/mood/MoodCheckIn';
+import { MoodAnalyzer } from '@/services/ai/MoodAnalyzer';
+import { habitAnalyzer } from '@/services/ai/HabitAnalyzer';
 
 const { width } = Dimensions.get('window');
 const CARD_W = (width - 60) / 2;
@@ -22,9 +25,24 @@ export default function DashboardScreen() {
   const loadReport = useReportStore((s) => s.loadSimulationReport);
   const { coins, totalTreesGrown, todayFocusMinutes, focusStreak, loadFocusData } = useFocusStore();
 
+  const [moodModalVisible, setMoodModalVisible] = useState(false);
+  const [moodState, setMoodState] = useState(() => MoodAnalyzer.getCurrentMoodState());
+  const [habitScore, setHabitScore] = useState(() => habitAnalyzer.getHabitScore([]));
+  const [riskDay, setRiskDay] = useState(() => habitAnalyzer.predictRiskDay([]));
+
+  const handleMoodSubmit = (mood: MoodType, energy: number, note?: string) => {
+    MoodAnalyzer.addMoodCheckIn(mood, energy, note);
+    setMoodState(MoodAnalyzer.getCurrentMoodState());
+    setMoodModalVisible(false);
+  };
+
   useEffect(() => {
     if (!report) loadReport();
     loadFocusData();
+    // Refresh mood state and habit data on mount
+    setMoodState(MoodAnalyzer.getCurrentMoodState());
+    setHabitScore(habitAnalyzer.getHabitScore([]));
+    setRiskDay(habitAnalyzer.predictRiskDay([]));
     // 키워드를 확장 프로그램과 동기화
     if (profile?.blockedKeywords) {
       ChromeExtensionBridge.syncKeywordsToExtension(profile.blockedKeywords);
@@ -67,6 +85,7 @@ export default function DashboardScreen() {
   ];
 
   return (
+    <>
     <ScrollView style={s.container} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
 
       {/* Header */}
@@ -79,8 +98,48 @@ export default function DashboardScreen() {
           <View style={s.coinBadge}>
             <Text style={s.coinText}>🪙 {coins}</Text>
           </View>
+          <TouchableOpacity onPress={() => setMoodModalVisible(true)} style={s.moodBtn}>
+            <Text style={s.moodBtnText}>
+              {moodState.reportedMood === 'great' ? '😄' :
+               moodState.reportedMood === 'good' ? '🙂' :
+               moodState.reportedMood === 'neutral' ? '😐' :
+               moodState.reportedMood === 'stressed' ? '😰' :
+               moodState.reportedMood === 'anxious' ? '😟' : '😊'}
+            </Text>
+          </TouchableOpacity>
           <TouchableOpacity onPress={() => nav('/(tabs)/settings')}>
             <Ionicons name="settings-outline" size={24} color="#6B6B8D" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Wellness Score Card */}
+      <View style={s.wellnessCard}>
+        <View style={s.wellnessLeft}>
+          <Text style={s.wellnessTitle}>웰니스 점수</Text>
+          <View style={s.wellnessScoreRow}>
+            <Text style={[s.wellnessScore, {
+              color: habitScore >= 70 ? '#10B981' : habitScore >= 40 ? '#FBBF24' : '#EF4444'
+            }]}>{habitScore}</Text>
+            <Text style={s.wellnessScoreMax}>/100</Text>
+          </View>
+          <Text style={s.wellnessRiskDay}>⚠️ 주의일: {riskDay.dayOfWeek}</Text>
+        </View>
+        <View style={s.wellnessRight}>
+          <View style={s.stressRow}>
+            <Text style={s.stressLabel}>스트레스</Text>
+            <View style={s.stressBarBg}>
+              <View style={[s.stressBarFill, {
+                width: `${moodState.inferredStress}%`,
+                backgroundColor: moodState.inferredStress > 60 ? '#EF4444' :
+                                 moodState.inferredStress > 30 ? '#FBBF24' : '#10B981'
+              }]} />
+            </View>
+            <Text style={s.stressValue}>{moodState.inferredStress}%</Text>
+          </View>
+          <TouchableOpacity style={s.moodCheckBtn} onPress={() => setMoodModalVisible(true)}>
+            <Ionicons name="happy-outline" size={14} color="#8B5CF6" />
+            <Text style={s.moodCheckText}>기분 체크인</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -249,6 +308,13 @@ export default function DashboardScreen() {
 
       <View style={{ height: 100 }} />
     </ScrollView>
+
+    <MoodCheckIn
+      visible={moodModalVisible}
+      onClose={() => setMoodModalVisible(false)}
+      onSubmit={handleMoodSubmit}
+    />
+    </>
   );
 }
 
@@ -308,4 +374,25 @@ const s = StyleSheet.create({
   goalPercent: { fontSize: 14, fontWeight: '700', color: '#8B5CF6' },
   goalBarBg: { height: 6, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' },
   goalBarFill: { height: '100%', borderRadius: 3 },
+  moodBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(139,92,246,0.15)', alignItems: 'center', justifyContent: 'center' },
+  moodBtnText: { fontSize: 20 },
+  wellnessCard: {
+    flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1, borderColor: 'rgba(139,92,246,0.25)', borderRadius: 16,
+    padding: 16, marginBottom: 20, gap: 16,
+  },
+  wellnessLeft: { flex: 1 },
+  wellnessTitle: { fontSize: 12, color: '#A0A0C0', fontWeight: '600', marginBottom: 4 },
+  wellnessScoreRow: { flexDirection: 'row', alignItems: 'baseline', gap: 2 },
+  wellnessScore: { fontSize: 36, fontWeight: '800' },
+  wellnessScoreMax: { fontSize: 14, color: '#6B6B8D' },
+  wellnessRiskDay: { fontSize: 11, color: '#FBBF24', marginTop: 6 },
+  wellnessRight: { flex: 1.4, justifyContent: 'center', gap: 10 },
+  stressRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  stressLabel: { fontSize: 11, color: '#A0A0C0', width: 44 },
+  stressBarBg: { flex: 1, height: 6, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' },
+  stressBarFill: { height: '100%', borderRadius: 3 },
+  stressValue: { fontSize: 11, color: '#A0A0C0', width: 30, textAlign: 'right' },
+  moodCheckBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(139,92,246,0.12)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, alignSelf: 'flex-start' },
+  moodCheckText: { fontSize: 12, color: '#8B5CF6', fontWeight: '600' },
 });

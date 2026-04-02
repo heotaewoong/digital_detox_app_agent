@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
+import { habitAnalyzer } from '@/services/ai/HabitAnalyzer';
 
 const DAYS = ['월', '화', '수', '목', '금', '토', '일'];
 
@@ -30,6 +31,13 @@ const CHALLENGES = [
 export default function WeeklyReportScreen() {
   const router = useRouter();
   const [completedChallenges, setCompletedChallenges] = useState<string[]>([]);
+
+  // HabitAnalyzer integration — uses simulated 30-day data
+  const habitTrend = useMemo(() => habitAnalyzer.analyzeHabitTrend([], 'weekly'), []);
+  const habitScore = useMemo(() => habitAnalyzer.getHabitScore([]), []);
+  const habitPatterns = useMemo(() => habitAnalyzer.detectHabitPatterns([]), []);
+  const weeklyInsights = useMemo(() => habitAnalyzer.generateWeeklyInsight([]), []);
+  const riskDay = useMemo(() => habitAnalyzer.predictRiskDay([]), []);
 
   const maxScreen = Math.max(...WEEKLY_DATA.map((d) => d.screenTime));
   const avgScreen = Math.round(WEEKLY_DATA.reduce((s, d) => s + d.screenTime, 0) / 7);
@@ -132,16 +140,66 @@ export default function WeeklyReportScreen() {
           </View>
         </View>
 
-        {/* AI Weekly Insight */}
-        <Text style={st.secTitle}>AI 주간 분석</Text>
-        <View style={st.aiCard}>
-          <Ionicons name="sparkles" size={20} color="#8B5CF6" />
-          <Text style={st.aiText}>
-            이번 주 평균 사용시간은 {avgScreen}분이고, 생산성 평균은 {avgProductive}%입니다.
-            {bestDay.day}요일에 가장 집중을 잘 했고, {worstDay.day}요일에는 비생산적 사용이 많았어요.
-            {avgProductive >= 60 ? ' 전반적으로 좋은 한 주였어요! 이 페이스를 유지하세요.' : ' 다음 주에는 집중 세션을 더 활용해보세요.'}
-          </Text>
+        {/* Habit Score Card */}
+        <Text style={st.secTitle}>🧠 AI 습관 분석</Text>
+        <View style={st.habitScoreCard}>
+          <View style={st.habitScoreLeft}>
+            <Text style={st.habitScoreLabel}>습관 점수</Text>
+            <Text style={[st.habitScoreNum, {
+              color: habitScore >= 70 ? '#10B981' : habitScore >= 40 ? '#FBBF24' : '#EF4444'
+            }]}>{habitScore}</Text>
+            <Text style={st.habitScoreMax}>/100</Text>
+          </View>
+          <View style={st.habitScoreRight}>
+            <View style={st.habitStatRow}>
+              <Text style={st.habitStatLbl}>평균 스크린타임</Text>
+              <Text style={st.habitStatVal}>{habitTrend.avgScreenTime}분/일</Text>
+            </View>
+            <View style={st.habitStatRow}>
+              <Text style={st.habitStatLbl}>평균 차단 수</Text>
+              <Text style={st.habitStatVal}>{habitTrend.avgBlockedCount}건/일</Text>
+            </View>
+            <View style={st.habitStatRow}>
+              <Text style={st.habitStatLbl}>개선율</Text>
+              <Text style={[st.habitStatVal, { color: habitTrend.improvementRate >= 0 ? '#10B981' : '#EF4444' }]}>
+                {habitTrend.improvementRate >= 0 ? '▲' : '▼'} {Math.abs(habitTrend.improvementRate)}%
+              </Text>
+            </View>
+            <View style={st.habitStatRow}>
+              <Text style={st.habitStatLbl}>위험 요일</Text>
+              <Text style={[st.habitStatVal, { color: '#FBBF24' }]}>{riskDay.dayOfWeek}</Text>
+            </View>
+          </View>
         </View>
+
+        {/* Habit Patterns */}
+        {habitPatterns.length > 0 && (
+          <>
+            <Text style={st.secTitle}>📊 행동 패턴</Text>
+            {habitPatterns.slice(0, 3).map((p, i) => (
+              <View key={i} style={[st.patternCard, {
+                borderColor: p.type === 'improvement' ? 'rgba(16,185,129,0.3)' :
+                             p.type === 'regression' ? 'rgba(239,68,68,0.3)' :
+                             p.type === 'spike' ? 'rgba(239,68,68,0.4)' :
+                             'rgba(139,92,246,0.3)',
+              }]}>
+                <Text style={st.patternText}>{p.description}</Text>
+                <Text style={[st.patternConf, { color: p.confidence >= 0.8 ? '#10B981' : '#FBBF24' }]}>
+                  신뢰도 {Math.round(p.confidence * 100)}%
+                </Text>
+              </View>
+            ))}
+          </>
+        )}
+
+        {/* AI Weekly Insights */}
+        <Text style={st.secTitle}>💡 AI 주간 인사이트</Text>
+        {weeklyInsights.map((insight, i) => (
+          <View key={i} style={st.aiCard}>
+            <Ionicons name="sparkles" size={16} color="#8B5CF6" style={{ marginTop: 2 }} />
+            <Text style={st.aiText}>{insight}</Text>
+          </View>
+        ))}
 
         {/* Daily Challenge */}
         <Text style={st.secTitle}>오늘의 챌린지 🎯</Text>
@@ -230,4 +288,24 @@ const st = StyleSheet.create({
   diffBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
   diffText: { fontSize: 11, fontWeight: '600' },
   spacer: { height: 100 },
+  // Habit Analyzer styles
+  habitScoreCard: {
+    flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1, borderColor: 'rgba(139,92,246,0.25)', borderRadius: 16,
+    padding: 18, marginBottom: 20, gap: 16,
+  },
+  habitScoreLeft: { alignItems: 'center', justifyContent: 'center', width: 80 },
+  habitScoreLabel: { fontSize: 11, color: '#A0A0C0', fontWeight: '600', marginBottom: 4 },
+  habitScoreNum: { fontSize: 42, fontWeight: '800' },
+  habitScoreMax: { fontSize: 13, color: '#6B6B8D' },
+  habitScoreRight: { flex: 1, justifyContent: 'center', gap: 10 },
+  habitStatRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  habitStatLbl: { fontSize: 12, color: '#A0A0C0' },
+  habitStatVal: { fontSize: 13, fontWeight: '600', color: '#FFF' },
+  patternCard: {
+    backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderRadius: 12,
+    padding: 14, marginBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8,
+  },
+  patternText: { flex: 1, fontSize: 13, color: '#D0D0F0', lineHeight: 20 },
+  patternConf: { fontSize: 11, fontWeight: '600', paddingTop: 2 },
 });

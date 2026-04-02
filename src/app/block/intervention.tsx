@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,23 +9,43 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useUserStore } from '@/store/useUserStore';
 import { MotivationGenerator } from '@/services/ai/MotivationGenerator';
+import { AdaptiveInterventionEngine } from '@/services/ai/AdaptiveInterventionEngine';
+import { MoodAnalyzer } from '@/services/ai/MoodAnalyzer';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '@/utils/theme';
 
 const { width, height } = Dimensions.get('window');
-const COOLDOWN_SECONDS = 30;
 
 export default function InterventionScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ category?: string; riskScore?: string }>();
   const profile = useUserStore((s) => s.profile);
 
+  // Get adaptive intervention strategy based on current context
+  const moodState = MoodAnalyzer.getCurrentMoodState();
+  const [strategy] = useState(() => {
+    const category = params.category ?? 'social_media';
+    const riskScore = params.riskScore ? Number(params.riskScore) : 70;
+    const contextAnalysis = {
+      originalRiskScore: riskScore,
+      adjustedRiskScore: riskScore,
+      contextFactors: [category],
+      recommendedAction: (riskScore >= 80 ? 'hard_block' : riskScore >= 65 ? 'soft_block' : riskScore >= 50 ? 'warn' : 'log') as any,
+      reasoning: `카테고리: ${category}, 위험도: ${riskScore}`,
+    };
+    const goals = profile?.goals?.map((g) => g.title) ?? [];
+    return AdaptiveInterventionEngine.selectStrategy(moodState, contextAnalysis, goals);
+  });
+
+  const COOLDOWN_SECONDS = strategy.cooldownSeconds;
   const [countdown, setCountdown] = useState(COOLDOWN_SECONDS);
   const [motivationText] = useState(() => MotivationGenerator.getQuickMotivation());
   const [dreamReminder] = useState(() =>
     MotivationGenerator.getDreamReminder(profile?.dreams ?? []),
   );
+  const startTimeRef = useRef(Date.now());
 
   const shieldScale = useState(() => new Animated.Value(0))[0];
   const contentOpacity = useState(() => new Animated.Value(0))[0];
@@ -63,19 +83,30 @@ export default function InterventionScreen() {
   }, [countdown]);
 
   const isButtonActive = countdown === 0;
+  // Hard-block type never allows going back
+  const canGoBack = strategy.type !== 'block';
+
+  const recordResult = useCallback((complied: boolean) => {
+    AdaptiveInterventionEngine.recordInterventionResult(
+      strategy.type,
+      complied ? 'complied' : 'dismissed',
+    );
+  }, [strategy.type]);
 
   const handleGoBack = useCallback(() => {
-    if (!isButtonActive) return;
+    if (!isButtonActive || !canGoBack) return;
+    recordResult(true);
     if (router.canGoBack()) {
       router.back();
     } else {
       router.replace('/(tabs)/dashboard');
     }
-  }, [isButtonActive, router]);
+  }, [isButtonActive, canGoBack, recordResult, router]);
 
   const handleGoToDashboard = useCallback(() => {
+    recordResult(false);
     router.replace('/(tabs)/dashboard');
-  }, [router]);
+  }, [recordResult, router]);
 
   const formatCountdown = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
@@ -105,10 +136,43 @@ export default function InterventionScreen() {
       {/* Content */}
       <Animated.View style={[styles.content, { opacity: contentOpacity }]}>
         {/* Title */}
-        <Text style={styles.title}>유해 콘텐츠가 감지되었습니다</Text>
+        <Text style={styles.title}>{strategy.message}</Text>
         <Text style={styles.subtitle}>
-          ContentGuardian이 유해한 콘텐츠를 차단했습니다
+          {strategy.type === 'block'
+            ? '⛔ 강력 차단 모드 — 이 콘텐츠는 허용되지 않습니다'
+            : strategy.type === 'delay'
+            ? '🛑 콘텐츠가 차단되었습니다. 잠시 멈춰보세요'
+            : 'ContentGuardian이 유해한 콘텐츠를 감지했습니다'}
         </Text>
+
+        {/* Adaptive Strategy Badge */}
+        <View style={[styles.strategyBadge, {
+          backgroundColor: strategy.intensity >= 5 ? 'rgba(239,68,68,0.15)' :
+                           strategy.intensity >= 4 ? 'rgba(251,191,36,0.15)' :
+                           'rgba(139,92,246,0.15)',
+          borderColor: strategy.intensity >= 5 ? 'rgba(239,68,68,0.4)' :
+                       strategy.intensity >= 4 ? 'rgba(251,191,36,0.4)' :
+                       'rgba(139,92,246,0.4)',
+        }]}>
+          <Text style={styles.strategyBadgeText}>
+            🧠 AI 개입 강도: {strategy.intensity >= 5 ? '🔴 긴급' :
+                             strategy.intensity >= 4 ? '🟠 높음' :
+                             strategy.intensity >= 3 ? '🟡 보통' : '🟢 낮음'}
+          </Text>
+        </View>
+
+        {/* Alternative Activity (if suggested) */}
+        {strategy.suggestAlternative && (
+          <View style={[styles.card, { borderColor: 'rgba(16,185,129,0.3)' }]}>
+            <View style={styles.cardHeader}>
+              <Ionicons name="leaf" size={20} color="#10B981" />
+              <Text style={styles.cardHeaderText}>대신 이렇게 해보세요</Text>
+            </View>
+            <Text style={[styles.motivationText, { color: '#10B981' }]}>
+              {strategy.suggestAlternative}
+            </Text>
+          </View>
+        )}
 
         {/* Motivation Card */}
         <View style={styles.card}>
@@ -119,14 +183,16 @@ export default function InterventionScreen() {
           <Text style={styles.motivationText}>{motivationText}</Text>
         </View>
 
-        {/* Dream Reminder Card */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Ionicons name="star" size={20} color={colors.accent} />
-            <Text style={styles.cardHeaderText}>나의 꿈</Text>
+        {/* Dream Reminder Card (show only if dreamReminder flag is on) */}
+        {strategy.showDreamReminder && (
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <Ionicons name="star" size={20} color={colors.accent} />
+              <Text style={styles.cardHeaderText}>나의 꿈</Text>
+            </View>
+            <Text style={styles.dreamText}>{dreamReminder}</Text>
           </View>
-          <Text style={styles.dreamText}>{dreamReminder}</Text>
-        </View>
+        )}
 
         {/* Countdown Timer */}
         <View style={styles.timerContainer}>
@@ -144,26 +210,28 @@ export default function InterventionScreen() {
 
         {/* Buttons */}
         <View style={styles.buttonContainer}>
-          <TouchableOpacity
-            style={[styles.backButton, !isButtonActive && styles.backButtonDisabled]}
-            onPress={handleGoBack}
-            disabled={!isButtonActive}
-            activeOpacity={0.7}
-          >
-            <Ionicons
-              name="arrow-back"
-              size={20}
-              color={isButtonActive ? colors.textPrimary : colors.textMuted}
-            />
-            <Text
-              style={[
-                styles.backButtonText,
-                !isButtonActive && styles.backButtonTextDisabled,
-              ]}
+          {canGoBack && (
+            <TouchableOpacity
+              style={[styles.backButton, !isButtonActive && styles.backButtonDisabled]}
+              onPress={handleGoBack}
+              disabled={!isButtonActive}
+              activeOpacity={0.7}
             >
-              돌아가기
-            </Text>
-          </TouchableOpacity>
+              <Ionicons
+                name="arrow-back"
+                size={20}
+                color={isButtonActive ? colors.textPrimary : colors.textMuted}
+              />
+              <Text
+                style={[
+                  styles.backButtonText,
+                  !isButtonActive && styles.backButtonTextDisabled,
+                ]}
+              >
+                {strategy.actionLabel}
+              </Text>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity
             style={styles.dashboardButton}
@@ -342,5 +410,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#A855F7',
+  },
+  strategyBadge: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginBottom: spacing.md,
+    alignSelf: 'center',
+  },
+  strategyBadgeText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#E0E0FF',
   },
 });
